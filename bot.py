@@ -11,7 +11,7 @@ WINDOW_SIZE = (500, 400)
 
 prev_ball = None
 PADDLE_SPEED = 6  # Cada comando move o paddle 6 pixels
-TOLERANCIA = 22 # Zona de tolerância para evitar oscilações
+TOLERANCIA = 15 # Zona de tolerância para evitar oscilações
 
 def process_frame(frame):
     """Converte o frame para escala de cinza e aplica limiar."""
@@ -31,14 +31,14 @@ def detect_objects(frame):
     for contour in contours:
         x, y, w, h = cv2.boundingRect(contour)
 
-        if 1 < w < 10 and 1 < h < 10:  # Bola (pequena)
+        if 1 < w < 5 and 1 < h < 5:  # Bola (pequena)
             ball = (x + w // 2, y + h // 2)
         elif h > 10 and h < 17 and w < 10:  # Paddle (barra)
             paddles.append((x, y, w, h))
 
     return ball, paddles
 
-def calcular_trajetoria(prev_ball, ball, x_limite=139, y_min=34, y_max=194):
+def calcular_trajetoria(prev_ball, ball, x_limite=140, y_min=34, y_max=194):
     """Calcula os pontos da trajetória da bola até x_limite, considerando as reflexões nas paredes."""
     x0, y0 = ball
     x1, y1 = prev_ball
@@ -68,6 +68,8 @@ def calcular_trajetoria(prev_ball, ball, x_limite=139, y_min=34, y_max=194):
 
     return trajetoria
 
+last_predicted_y = None
+
 # Loop principal
 while True:
     processed_frame = process_frame(obs)
@@ -76,22 +78,23 @@ while True:
     display_frame = cv2.cvtColor(processed_frame, cv2.COLOR_GRAY2BGR)
 
     # Desenhar os paddles (retângulos vermelhos)
-    for x, y, w, h in paddles:
-        cv2.rectangle(display_frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
+    #for x, y, w, h in paddles:
+    #    cv2.rectangle(display_frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
 
     # Desenhar a bola (círculo verde)
-    if ball:
-       cv2.circle(display_frame, ball, 5, (0, 255, 0), -1)
+    #if ball:
+    #   cv2.circle(display_frame, ball, 5, (0, 255, 0), -1)
 
     # Calcular e desenhar trajetória prevista
     predicted_y = None
     if prev_ball and ball and ball[0] > prev_ball[0]:  # Só prever se estiver indo para a direita
         trajeto = calcular_trajetoria(prev_ball, ball)
-        for x, y in trajeto:
-            cv2.circle(display_frame, (int(x), int(y)), 2, (255, 0, 0), -1)  # Azul para previsão
+        #for x, y in trajeto:
+        #    cv2.circle(display_frame, (int(x), int(y)), 2, (255, 0, 0), -1)  # Azul para previsão
 
         if trajeto:
             predicted_y = trajeto[-1][1]  # Última posição Y prevista
+            last_predicted_y = predicted_y
 
     # Atualizar a posição anterior da bola
     prev_ball = ball
@@ -101,7 +104,7 @@ while True:
     if len(paddles) >= 2:
         # Ordenar os paddles pelo valor X (o segundo deve ser o da direita)
         paddles.sort(key=lambda p: p[0])
-        _, paddle_y, _, paddle_h = paddles[1]  # Pegamos o pad  dle da direita corretamente
+        _, paddle_y, _, paddle_h = paddles[1]  # Pegamos o paddle da direita corretamente
         center_paddle = paddle_y + paddle_h // 2  # Centro do paddle
 
         if predicted_y is not None:
@@ -118,7 +121,13 @@ while True:
                     action[5] = 1  # Mover para baixo
 
             print(f"Center Paddle: {center_paddle}, Predicted Y: {predicted_y}, Deslocamento: {deslocamento_necessario}, Movimentos: {movimentos_necessarios}")
-
+    elif(len(paddles)==1):
+        paddle_x, _, _, _ = paddles[0]
+        if paddle_x < 80 and last_predicted_y is not None and ball and ball[0] > 120:
+            if last_predicted_y < 80:
+                action[5] = 1  # Mover para baixo
+            else:
+                action[4] = 1  # Mover para cima
 
     # Exibir imagem processada
     resized_frame = cv2.resize(display_frame, WINDOW_SIZE, interpolation=cv2.INTER_LINEAR)
